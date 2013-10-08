@@ -42,13 +42,14 @@ class DietDeploy():
         self.nodes_green = getNodesfromFile("./nodes_green")
         self.nodes_service = getNodesfromFile("./nodes_service")
     
+        self.local_repository = os.getcwd()+"/"
         
         
         self.makespan = -1
     
     def update_frontend(self):
         logger.info("Update DIET folder on %s frontend...",self.site)
-        os.system("rsync -avz ~/dev/diet_execo/dietg "+self.site+".g5k:/home/dbalouek/")
+        os.system("rsync -avz "+self.local_repository+"dietg "+self.site+".g5k:/home/dbalouek/")
         logger.info("Sent")
         
     def update_nodes(self):
@@ -58,6 +59,7 @@ class DietDeploy():
         logger.info("Done!")
         
     def clean_archi(self):
+        """ Delete all files related to an existing DIET archi """
         logger.info("Clean DIET architecture")
         process = Process("./dietg/clean_archi_diet.sh")
         process.run()
@@ -119,9 +121,9 @@ class DietDeploy():
         for s in a.processes():
             pout = s.stdout()
         logger.debug(pout)
-               
+        
         site = self.site
-        cmd = "sed -i 's/LA_"+site+"/MA1/g' /root/dietg/cfgs/SeD_"+site+".cfg;"
+        cmd = "sed -i 's/LA_"+site+"/MA1/g' /root/dietg/cfgs/server.cfg;"
         a = Remote(cmd, servers, connexion_params = root_connexion_params).run()
         
         cmd = "cd /root/dietg/; ./set_sed.sh"
