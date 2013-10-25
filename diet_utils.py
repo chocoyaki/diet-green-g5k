@@ -1,5 +1,5 @@
 from execo import configuration, logger, Put, Process, Remote
-from execo.log import set_style
+#from execo.log import set_style
 from execo_g5k.oar import format_oar_date
 from execo_g5k import get_oar_job_nodes, OarSubmission, oargridsub, get_oargrid_job_nodes, wait_oargrid_job_start, get_oargrid_job_oar_jobs, get_oar_job_kavlan, oargriddel, deploy, Deployment
 from execo_g5k.api_utils import get_host_site,get_cluster_site, get_g5k_sites, get_g5k_clusters, get_resource_attributes, get_host_attributes, get_cluster_attributes, get_site_clusters
@@ -11,7 +11,7 @@ import sys
 from pprint import pprint
 
 from execo import configuration, logger, Put, Process, Remote, Get, Host
-from execo_g5k import get_host_attributes, get_site_attributes, APIConnexion
+from execo_g5k import get_host_attributes, get_site_attributes, APIConnection
 import shutil
 import logging
 import os
@@ -100,12 +100,12 @@ def get_g5k_api_measures(node_name,site_name,metric,start_timestamp,end_timestam
     end_date = datetime.fromtimestamp(float(end_timestamp)).strftime('%Y-%m-%d %H:%M:%S')
     
     logger.debug("Get %s from %r to %r on %s",node_name,start_date,end_date,node_name)
-    request = "grid5000/sites/"+site_name+"/metrics/"+metric+"/timeseries/"+node_name+"?resolution="+str(resolution)+"&from="+str(start_timestamp)+"&to="+str(end_timestamp)
+    request = "sites/"+site_name+"/metrics/"+metric+"/timeseries/"+node_name+"?resolution="+str(resolution)+"&from="+str(start_timestamp)+"&to="+str(end_timestamp)
     
     #curl -k "https://api.grid5000.fr/2.1/grid5000/sites/lyon/metrics/pdu/timeseries/taurus-3?resoltuion=15&from=1370205024&to=1370205400"
     
     logger.debug("API Request = %s",request)
-    attr = APIConnexion()
+    attr = APIConnection()
     response = attr.get(request)
     
     # Convert the result as a dict
