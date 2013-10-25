@@ -30,7 +30,7 @@ else:
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
 env = "http://public.nancy.grid5000.fr/~dbalouek/ens/debian/wheezy-x64-diet.dsc"
 walltime = '01:30:00'
-n_nodes = 4
+n_nodes = 1
 oargridsub_opts = '-t deploy'
 nodes_gr1 = "./nodes_gr1"
 nodes_gr2 ="./nodes_gr2"
