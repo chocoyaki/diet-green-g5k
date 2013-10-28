@@ -90,7 +90,7 @@ print nodes
 
 logger.info("Deployment started")
 #logger.setLevel(1)
-nodes = deploy(Deployment(hosts = nodes, env_file = "http://public.nancy.grid5000.fr/~dbalouek/envs/debian/wheezy-x64-diet.dsc", 
+nodes = deploy(Deployment(hosts = nodes, env_name = "wheezy-x64-diet", 
                           user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command = False)
 deploy_nodes = nodes[0]   
 ko_nodes = nodes[1]
