@@ -28,8 +28,8 @@ else:
 
 
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
-env = "http://public.nancy.grid5000.fr/~dbalouek/ens/debian/wheezy-x64-diet.dsc"
-walltime = '01:30:00'
+env = "http://public.lyon.grid5000.fr/~dbalouek/ens/debian/wheezy-x64-diet.dsc"
+walltime = '01:00:00'
 n_nodes = 1
 oargridsub_opts = '-t deploy'
 nodes_gr1 = "./nodes_gr1"
@@ -45,7 +45,7 @@ except OSError:
 cluster = 'sagittaire'
 
 sites = []
-hosts_gr1 = {'cluster' : 'orion', 'number' : n_nodes}
+hosts_gr1 = {'cluster' : 'sagittaire', 'number' : n_nodes}
 hosts_gr2 = {'cluster' : 'taurus', 'number' : n_nodes}
 hosts_gr3 = {'cluster' : 'sagittaire', 'number' : n_nodes}
 
