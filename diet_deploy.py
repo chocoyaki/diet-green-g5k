@@ -34,6 +34,7 @@ class DietDeploy():
         self.scheduler = params_diet["scheduler"]
         self.concLimit = params_diet["concLimit"]
         self.useRate = params_diet["useRate"]
+        self.exp_time = params_diet["exp_time"]
         
         self.consumption = {}
         self.nb_tasks = {}
@@ -53,7 +54,7 @@ class DietDeploy():
     
     def update_frontend(self):
         logger.info("Update DIET folder on %s frontend...",self.site)
-        os.system("rsync -avz --append --progress "+self.local_repository+"dietg "+self.site+".g5k:/home/dbalouek/")
+        os.system("rsync -avz --progress "+self.local_repository+"dietg/ "+self.site+".g5k:/home/dbalouek/dietg/")
         logger.info("Sent")
         
     def update_nodes(self):
@@ -69,10 +70,10 @@ class DietDeploy():
         process.run()
         process = Process("./dietg/clean.sh")
         process.run()
-        process = Process("rm ./tmp")
+        process = Process("if [ -e ./tmp ]; then rm ./tmp; fi")
         process.run()
 
-    def create_archi_files(self):
+    def create_diet_architecture_files(self):
         logger.info("Create a DIET architecture") 
         # Architecture without LA
         process = Process("./dietg/set_archi_diet_4.sh gridnodes "+str(self.nodes_service[0]))
@@ -87,7 +88,7 @@ class DietDeploy():
             # print file2
             set_parallel_jobs(file2, self.concLimit)
          
-    def retrieve_agents(self):
+    def retrieve_agents(self): # A faire une seule fois!
         self.MA = getNodesfromFile("./dietg/nodes/MA.list")
         #self.LA = getNodesfromFile("./dietg/nodes/LA.list")
         self.servers += self.nodes_gr1
@@ -134,10 +135,30 @@ class DietDeploy():
         cmd = "cd /root/dietg/; ./set_sed.sh"
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
         
-        cmd = "rm /root/dietg/log/total.jobs; rm /root/dietg/log/current.jobs;"
+        cmd = "if [ -e /root/dietg/log/total.jobs ]; then rm /root/dietg/log/total.jobs; fi"
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
         
+        cmd = "if [ -e /root/dietg/log/current.jobs ]; then rm /root/dietg/log/current.jobs; fi"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
         logger.info("Done!")
+    
+    def reload_MA(self):
+        # Reinitialize tasks counters on servers
+        hostname = self.MA
+        cmd = "killall dietAgent; cd /root/dietg/; ./set_masternode.sh"
+        a = Remote(cmd, hostname, connection_params = root_connection_params).start()
+    def reload_servers(self):  
+        servers = [host for host in self.servers]
+        
+        cmd = "if [ -e /root/MA.stat ]; then rm /root/MA.stat; touch /root/MA.stat; fi"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        cmd = "cd /root/dietg/; ./unset_sed.sh; killall server"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        cmd = "cd "+sched_dir+"; make"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        cmd = "cd /root/dietg/; ./set_sed.sh"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        
         
     def start_clients(self):
         clients = [self.clients]
@@ -175,7 +196,10 @@ class DietDeploy():
 #             
 #         logger.info("Etalonnage termine")  
         
-        cmd = "rm /root/dietg/log/*.jobs"
+        cmd = "if [ -e /root/dietg/log/total.jobs ]; then rm /root/dietg/log/total.jobs; fi"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        
+        cmd = "if [ -e /root/dietg/log/current.jobs ]; then rm /root/dietg/log/current.jobs; fi"
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
         
         cmd = "cd "+sched_dir+"; ./client_matrix"
@@ -193,20 +217,41 @@ class DietDeploy():
         
         logger.info("Done, check the logs!")
         
-    def retrieve_results(self,start,end):
+    def retrieve_results(self,start,end,oargrid_job_id):
+        self.makespan = end - start;
         resolution = 15
         self.consumption["total"] = 0
         now = strftime("%d_%b_%H:%M", gmtime())
         
-        file_results = "%s_%s+%s.log" % (self.scheduler,str(self.useRate),now)
+        folder_name = "results_"+str(oargrid_job_id)+"_"+self.scheduler
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+        filename = "./"+folder_name+"/%s_%s.log" % (self.scheduler,str(oargrid_job_id))
+        already_exists = True
+        counter = 0
+        while already_exists:
+            try:
+               with open(filename):
+                   already_exists = True
+                   counter += 1
+                   filename = "%s_%s_%s.log" % (self.scheduler,str(oargrid_job_id),str(counter))
+            except IOError:
+              already_exists = False
+        # Increments counter to change file name
+        
+        file_results = filename
+        
         with open(file_results, "a") as fichier_resultats:
+            fichier_resultats.write("Use Rate = %s"%(str(self.useRate)))
+            fichier_resultats.write("Exp Time = %s"%(str(self.exp_time)))
+            fichier_resultats.write("\n\n")            
                                      
             logger.info("Retrieve consumption per SeD")
             for sed in self.servers:
                 self.consumption[sed] = get_g5k_api_measures(sed, get_host_site(sed), "pdu", start, end, resolution)
                 self.consumption["total"] += float(self.consumption[sed])
                 logger.info("Electric Consumption of %s = %s",sed,self.consumption[sed])
-                fichier_resultats.write("Electric Consumption of %s = %s"%(sed,self.consumption[sed]))
+                fichier_resultats.write("Electric Consumption of %s = %sW (%sJ)"%(sed,self.consumption[sed],self.consumption[sed]*self.makespan))
                 fichier_resultats.write("\n")
             
             logger.info("Retrieve consumption per MA")
@@ -214,24 +259,27 @@ class DietDeploy():
                 self.consumption[MA] = get_g5k_api_measures(MA, get_host_site(MA), "pdu", start, end, resolution)
                 self.consumption["total"] += float(self.consumption[MA])
                 logger.info("Electric Consumption of %s = %s",MA,self.consumption[MA])
-                fichier_resultats.write("Electric Consumption of %s = %s"%(MA,self.consumption[MA]))
+                fichier_resultats.write("Electric Consumption of %s = %sW (%sJ)"%(MA,self.consumption[MA],self.consumption[MA]*self.makespan))
                 fichier_resultats.write("\n")
                 
             logger.info("Retrieve total consumption")
-            logger.debug("Electric Consumption of the architecture")
+            logger.info("Electric Consumption of the architecture")
             print self.consumption["total"]
-            fichier_resultats.write("Total consumption = %s"%(self.consumption["total"]))
+            fichier_resultats.write("Total consumption = %sW (%sJ)"%(self.consumption["total"],self.consumption["total"]*self.makespan))
             fichier_resultats.write("\n")
             
             logger.info("Retrieve number of tasks per SeD")
             self.get_nb_tasks_server()
             for host,task in self.nb_tasks.iteritems():
-                logger.info("%s : %d tasks",host,task)
+                logger.debug("%s : %d tasks",host,task)
                 fichier_resultats.write("%s : %d tasks"%(host,task))
                 fichier_resultats.write("\n")
+                
+            logger.info("Retrieve SeD log files")
+            nb_files = self.get_logs_from_server()
+            logger.info("%s / %s files were retrieved",str(nb_files),str(len(self.servers)))
                         
             logger.info("Retrieve total makespan")
-            self.makespan = end - start;
             logger.info("Total makespan = %d",self.makespan)
             fichier_resultats.write("Total makespan = %s"%(self.makespan))
             fichier_resultats.write("\n")
@@ -259,7 +307,7 @@ class DietDeploy():
             os.system('ssh-keygen -f "/home/dbalouek/.ssh/known_hosts" -R '+host)
         
 
-    def task_distribution(self,nb_nodes,pause = 20,task_action = "/root/dietg/diet-sched-example/client_matrix",hostname = None,connection_params = {'user': 'root'},capacity = 50.0,work_rate = 2):
+    def task_distribution(self,nb_nodes,pause = 10,task_action = "/root/dietg/diet-sched-example/client_matrix",hostname = None,connection_params = {'user': 'root'},capacity = 50.0,work_rate = 2):
         """ Distribute task according to:
             nb_nodes: a number of nodes
             capacity : utilization rate of the platform at a given time
@@ -270,6 +318,9 @@ class DietDeploy():
         
         i = 0
         j = 0
+        nb_diet_error = 0
+        nb_diet_success = 0
+        nb_diet_nofound = 0
         distrib = []
         
         array_process = set()
@@ -278,38 +329,41 @@ class DietDeploy():
         if hostname is None:
             hostname = [self.clients]
         
+        logger.info("Execute : "+task_action)
         #First wave
         for i in range(1,int(nb_initial)+1):
             j=i
             a = Remote(task_action, hostname, connection_params).start()
+            time.sleep(1) #Dirty way to not burst the client into mistake (e.g. a server receive all rrequests at the same time)
             array_process.add(a)
             distrib.append(i)
-            logger.info("Execute : "+task_action)
-            for s in a.processes:
-                pout = s.stdout
-                logger.info(pout)
             
         #Second wave
         for i in range(int(j+1),int(nb_total)+1):
             #Wait
-            logger.debug("PAUSE")
             distrib.append("PAUSE")
             time.sleep(pause)
             #Action
             distrib.append(i)
             a = Remote(task_action, hostname, connection_params).start()
             array_process.add(a)
-            logger.debug(task_action)
-            for s in a.processes:
-                pout = s.stdout
-                logger.info(pout)
-        
+                   
         
         logger.info("Loi d'arrivee")    
         logger.info(distrib)
         for process in array_process:
             process.wait()
-        logger.info("All the jobs are terminated")
+            for s in process.processes:
+                pout = s.stdout
+                logger.info(pout)
+                if "no server found" in pout:
+                    nb_diet_nofound += 1
+                elif "diet call error" in pout:
+                    nb_diet_error += 1
+                elif "diet call success" in pout:
+                    nb_diet_success += 1
+                       
+        logger.info("All the jobs are terminated (success = %s) | (error =%s)",str(nb_diet_success),str(nb_diet_error))
         
     def get_nb_tasks_server(self):
         distant_file = "/root/dietg/log/total.jobs"
@@ -329,20 +383,39 @@ class DietDeploy():
                     os.remove(local_file);
                 except OSError:
                     pass
-                
+    
+    def get_logs_from_server(self):
+        distant_file = "/root/MA.stat"
+        nb_files = 0
+#         Get(self.servers, [distant_file])
+        for host in self.servers:
+                local_file = host+"_"+self.scheduler+"_SeD.stat"
+                process = Process("scp root@"+host+":"+distant_file+" "+local_file)
+                process.run()
+                try: #si le fichier existe
+                    with open(local_file) as fichier:
+                        nb_files += 1
+                        fichier.close
+                except IOError: #si le fichier n'existe pas
+                    pass
+        return nb_files
                 
     
     def benchmark_metrics(self):
+        nb_diet_success = 0
+        nb_diet_error = 0
+        nb_diet_nofound = 0
+        
         log_repository = "/root/dietg/log/"
         servers = [host for host in self.servers]
         logger.info("Clear bench files")
         
-        cmd = "rm "+log_repository+"/flops_watts.bench; "+"rm "+log_repository+"/conso.bench; "+"rm "+log_repository+"/flops.bench; "
+        cmd = "rm "+log_repository+"/flops_watts.bench 2> /dev/null; "+"rm "+log_repository+"/conso.bench 2> /dev/null; "+"rm "+log_repository+"/flops.bench 2> /dev/null; "
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
-        for s in a.processes:
-            pout = s.stdout
-        logger.debug(pout)
-        
+#         for s in a.processes:
+#             pout = s.stdout
+#         logger.debug(pout)
+#         
         # Initialise the clients
         clients = [self.clients]
         
@@ -359,20 +432,29 @@ class DietDeploy():
         logger.info(pout)
         
         logger.info("Benchmark_metrics")
-        logger.info("Bench started!")
+        logger.info("Another bench just started!")
         start = time.time()
         array_process = set()
         for x in range(len(self.servers)):
             cmd = "cd "+sched_dir+"; ./client_bench"
             a = Remote(cmd, clients, connection_params = root_connection_params).start()
+            time.sleep(1)
             array_process.add(a)
          
         for process in array_process:
             process.wait()
-            for s in a.processes:
+            for s in process.processes:
                 pout = s.stdout
-                logger.info(pout)
-            logger.info("Bench ended!")
+                logger.debug(pout)
+                if "no server found" in pout:
+                    nb_diet_nofound += 1
+                elif "diet call error" in pout:
+                    nb_diet_error += 1
+                elif "diet call success" in pout:
+                    nb_diet_success += 1
+                
+                
+        logger.info("All the bench are terminated (success = %s) | (error =%s) | (no server found = %s)",str(nb_diet_success),str(nb_diet_error),str(nb_diet_nofound))
         end = time.time()
           
         makespan = end - start;
@@ -387,36 +469,36 @@ class DietDeploy():
         bench_file = "conso.bench"
         for sed in self.servers:
             self.consumption_bench[sed] = get_g5k_api_measures(sed, get_host_site(sed), "pdu", start, end, resolution)
-            logger.info("Electric Consumption of %s = %s",sed,self.consumption_bench[sed])
-            with open(bench_file, "a") as file1:
-                file1.write(str(self.consumption_bench[sed]))
+            logger.debug("Electric Consumption of %s = %sW (%sJ)",sed,self.consumption_bench[sed],self.consumption_bench[sed]*makespan)
+            with open(bench_file, "w") as file1:
+                file1.write(str(self.consumption_bench[sed]*makespan))
                 file1.write("\n")
                 file1.close()
-            os.system("scp "+bench_file+" root@"+sed+":"+log_repository) #.g5k
+            os.system("scp "+bench_file+" root@"+sed+":"+log_repository+" > /dev/null") #.g5k
         
         # Performance / FLOPS
         logger.info("Retrieve FLOPS per SeD")
         bench_file = "flops.bench"
         for sed in self.servers:
             self.flops_bench[sed] = get_host_attributes(sed)['performance']['node_flops'] 
-            logger.info("Flops Number of %s = %s",sed,self.flops_bench[sed])
-            with open(bench_file, "a") as file1:
+            logger.debug("Flops Number of %s = %s",sed,self.flops_bench[sed])
+            with open(bench_file, "w") as file1:
                 file1.write(str(self.flops_bench[sed]))
                 file1.write("\n")
                 file1.close()
-            os.system("scp "+bench_file+" root@"+sed+":"+log_repository)
+            os.system("scp "+bench_file+" root@"+sed+":"+log_repository+" > /dev/null")
         
         # Flops per Watts
         logger.info("Retrieve FLOPS/Watts per SeD")
         bench_file = "flops_watts.bench"
         for sed in self.servers:
             self.flops_watts_bench[sed] = self.flops_bench[sed] / self.consumption_bench[sed]
-            logger.info("flops_watt of %s = %s",sed,self.flops_watts_bench[sed])
-            with open(bench_file, "a") as file1:
+            logger.debug("flops_watt of %s = %s",sed,self.flops_watts_bench[sed])
+            with open(bench_file, "w") as file1:
                 file1.write(str(self.flops_watts_bench[sed]))
                 file1.write("\n")
                 file1.close()
-            os.system("scp "+bench_file+" root@"+sed+":"+log_repository)
+            os.system("scp "+bench_file+" root@"+sed+":"+log_repository+" > /dev/null")
             
         logger.info("Benchmark_metrics termine")
         return True

@@ -20,6 +20,7 @@ import pprint
 from datetime import datetime
 import json
 import matplotlib.pyplot as plt
+from os import path, access, R_OK
 
 logger.setLevel(logging.INFO)
 
@@ -31,8 +32,11 @@ def writeNodesToFile(inputList, outputFile):
     a.close()
     
 def file_len(inputFile):
-    num_lines = sum(1 for line in open(inputFile))
-    return num_lines
+    if path.isfile(inputFile):
+        num_lines = sum(1 for line in open(inputFile))
+        return num_lines
+    else:
+        return 0 #Le fichier n'existe pas
 
 # def push_sched_to_node(nodes):
 #     logger.info("Update sched folder on frontend...")
@@ -57,27 +61,8 @@ def getNodesfromFile(inputFile):
         nodes += host
     return nodes
 
-def set_scheduler(inputFileName, scheduler, custom_value = 1):
-    custom_value = str(custom_value)
-    scheduler_template = "./dietg/diet-sched-example/myscheduler.hh_t"
-    scheduler_instance = "./dietg/diet-sched-example/myscheduler.hh"
-    
-    try:
-        os.remove(scheduler_instance);
-    except OSError:
-        pass
-    
-    process = Process("cp "+scheduler_template+" "+scheduler_instance)
-    process.run()
-    cmd = "./dietg/set_scheduler_criteria.sh "+scheduler
-    print cmd
-    cmd = "sed -i 's/<<criteria>>/"+scheduler+"/g' "+scheduler_instance
-    process = Process(cmd)
-    process.run()
-    cmd = "sed -i 's/<<value>>/"+custom_value+"/g' "+scheduler_instance
-    process = Process(cmd)
-    process.run()
-    scheduler_path="schedulerModule =/root/dietg/diet-sched-example/myscheduler.so\n"
+def set_scheduler(inputFileName, scheduler):
+    scheduler_path="schedulerModule =/root/dietg/diet-sched-example/"+scheduler.lower()+".so\n"
     
     with open(inputFileName, "a") as MAcfg:
         MAcfg.write(scheduler_path)
@@ -147,3 +132,4 @@ def get_nb_tasks(inputFile):
 
 def save_results():
     print "TO DO!"
+    

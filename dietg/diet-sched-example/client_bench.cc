@@ -6,7 +6,7 @@
 const char *configuration_file = "/root/dietg/cfgs/client.cfg";
 const float MIN_DURATION = 20.0;
 const float MAX_DURATION = 60.0;
-const float FIXED_DURATION = 45.0;
+const float FIXED_DURATION = 45.0; //if 10 Implies at least 3 workers and a 2s pause between each request
 const float MIN_NUMPROCESSES = 1;
 const float MAX_NUMPROCESSES = 4;
 const float SIZE_MATRIX = 10;

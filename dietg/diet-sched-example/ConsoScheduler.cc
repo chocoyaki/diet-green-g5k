@@ -1,4 +1,4 @@
-#include "ConsoScheduler.hh"
+#include "myscheduler.hh"
 #include <scheduler/est_internal.hh>
 #include <boost/foreach.hpp>
 #include <iostream>
@@ -44,7 +44,7 @@ int MyScheduler::aggregate(corba_response_t* aggrResp, size_t max_srv,
   
   BOOST_FOREACH(corba_server_estimation_t &e, candidates) {
     double cpu_idle = diet_est_get_internal(&(e.estim), EST_CPUIDLE, 0.0);
-    double conso = diet_est_get_internal(&(e.estim), EST_CONSO, 0.0);
+    double conso = diet_est_get_internal(&(e.estim), EST_CONSOJOB, 0.0);
     double node_flops = diet_est_get_internal(&(e.estim), EST_NODEFLOPS, 0.0);
     double core_flops = diet_est_get_internal(&(e.estim), EST_COREFLOPS, 0.0);
     double num_cores = diet_est_get_internal(&(e.estim), EST_NUMCORES, 0.0);
@@ -55,19 +55,26 @@ int MyScheduler::aggregate(corba_response_t* aggrResp, size_t max_srv,
     std::cout << "  node_flops = " << node_flops << std::endl;
     std::cout << "  core_flops = " << core_flops << std::endl;
     std::cout << "  num_cores  = " << num_cores << std::endl;
-    std::cout << "  current_jobs  = " << current_jobs << std::endl;
+    std::cout << "  current_jobs = " << current_jobs << std::endl;
   }
   
   // Exclude servers that already working
   candidates.remove_if (is_busy());
     
-  /* We select the SeD by its consommation usage */
+  /* We select the SeD by determined criteria (see myscheduler.hh) */
   SORT(candidates, compConso);
   
   /* Convert the sorted list to a corba sequence*/
   STL_to_CORBA(candidates, aggrResp);
 
-  
+  /* Display the result of the sorting*/
+  int i = 0;
+  BOOST_FOREACH(corba_server_estimation_t &e, candidates) {
+    i += 1;
+    double conso = diet_est_get_internal(&(e.estim), EST_CONSOJOB, 0.0);
+    std::cout << i << " : metrics CONSOJOB (J) for server " << e.loc.hostName << " = " << conso << std::endl;
+  }
+    
   return 0;
 }
 

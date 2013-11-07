@@ -191,6 +191,7 @@ void MetricsAggregator::init(std::string node_name) {
   std::cout << "node_flops: " << node_flops << std::endl;
   std::cout << "core_flops: " << core_flops << std::endl;
   std::cout << "num_cores: " << num_cores << std::endl;
+  std::cout << "conso_job(user_defined_benchmark): " << conso_job << std::endl;
 }
 
 double MetricsAggregator::get_core_flops() { return core_flops; }

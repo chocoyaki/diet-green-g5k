@@ -1,7 +1,7 @@
 /**
  * @file  ConsoSchedulers.hh
  *
- * @brief   DIET ConsoScheduler class header
+ * @brief   DIET UserScheduler class header
  *
  * @author   Daniel BALOUEK (daniel.balouek@inria.fr)
  *
@@ -17,8 +17,8 @@
 #include <math.h>
 #include <cstdlib>
 
-#define USE_CONSO 0
-#define USE_PERF 1
+#define USE_CONSOJOB 0
+#define USE_NODEFLOPS 1
 #define USE_RANDOM 2
 #define USE_CUSTOM 3
 
@@ -169,94 +169,19 @@ private:
 #define USERDEFINED(server, nb) (diet_est_get_internal(&(server).estim, \
                                                        EST_USERDEFINED + (nb), \
                                                        0))
-#define CONSO(server) (diet_est_get_internal(&(server).estim, EST_CONSOJOB, 0.0))
+#define CONSOJOB(server) (diet_est_get_internal(&(server).estim, EST_CONSOJOB, 0.0))
 
 #define NODEFLOPS(server) (diet_est_get_internal(&(server).estim, EST_NODEFLOPS, 0.0))
 
 #define RANDOM(server) (random())
 
 #define CUSTOM(server) ( pow(CONSO(server),indice) / TIMESINCELASTSOLVE(server))
-/* (conso^indice)/(server)  */
 
-/* To define sort functions to use with a STL list. */
-
-/* Sorts in descending order (list[0] >= list[1] >= ...)
-   Used to sort a single-value metric. */
-
-/*#define SORTFUN(compConso, CONSO)
-  bool						
-  compConso(const corba_server_estimation_t &r1,     
-       const corba_server_estimation_t &r2) {   
-    return CONSO(r2) < CONSO(r1);             
-  }
-*/
-#if USE == USE_CONSO
-#define REV_SORTFUN(compFunction, CONSO)
-  bool						
+/* Sorting of the elements in ascending order (The smaller element will be at the first position in the list)*/
+bool						
   compFunction(const corba_server_estimation_t &r1,     
        const corba_server_estimation_t &r2) {   
-    return CONSO(r1) < CONSO(r2);             
-  }
-#elif USE == USE_NODEFLOPS
-  #define SORTFUN(compFunction, FLOPS)
-  bool						
-  compFunction(const corba_server_estimation_t &r1,     
-       const corba_server_estimation_t &r2) {
-    return NODEFLOPS(r1) < NODEFLOPS(r2);
-  }
-#elif USE == USE_PERF
-  #define SORTFUN(compFunction, TIMESINCELASTSOLVE)
-  bool						
-  compFunction(const corba_server_estimation_t &r1,     
-       const corba_server_estimation_t &r2) {
-    srandom(time(NULL));   
-    return TIMESINCELASTSOLVE(r2) < TIMESINCELASTSOLVE(r1);             
-  }
-#elif USE == USE_CUSTOM
-  #define SORTFUN(compFunction, CUSTOM)
-  bool						
-  compFunction(const corba_server_estimation_t &r1,     
-       const corba_server_estimation_t &r2) {   
-    return CUSTOM(r2) < CUSTOM(r1);             
-  }
-#endif
-
-
-/*#define SORTFUN(name, metric)			\
-  bool                                          \
-  name(const corba_server_estimation_t &r1,     \
-       const corba_server_estimation_t &r2) {   \
-    return metric(r2) < metric(r1);             \
-  }
-*/
-/* Sorts in descending order (list[0] >= list[1] >= ...)
-   Used to sort a multi-value metric. nb is the index of the value on which
-   the sort have to be made. */
-#define SORTFUN_NB(name, metric, nb)            \
-  bool                                          \
-  name(const corba_server_estimation_t &r1,     \
-       const corba_server_estimation_t &r2) {   \
-    return metric(r2, nb) < metric(r1, nb);     \
-  }
-
-/* Sorts in ascending order (list[0] < list[1] < ...)
-   Used to sort a single-value metric. */
-/*#define REV_SORTFUN(name, metric)		\
-  bool                                          \
-  name(const corba_server_estimation_t &r1,     \
-       const corba_server_estimation_t &r2) {   \
-    return metric(r1) < metric(r2);             \
-  }
-*/
-
-/* Sorts in ascending order (list[0] < list[1] < ...)
-   Used to sort a multi-value metric. nb is the index of the value on which
-   the sort have to be made. */
-#define REV_SORTFUN_NB(name, metric, nb)        \
-  bool                                          \
-  name(const corba_server_estimation_t &r1,     \
-       const corba_server_estimation_t &r2) {   \
-    return metric(r1, nb) < metric(r2, nb);     \
+    return CONSOJOB(r2) > CONSOJOB(r1);
   }
 
 /* Sorts the list using the comparison function "fun". */

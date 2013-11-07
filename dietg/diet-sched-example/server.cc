@@ -10,6 +10,9 @@
 #include <iostream>
 #include <fstream>
 #include <istream>
+#include <cstdlib>
+#include <string>
+
 using namespace std;
 
 const char *configuration_file = "/root/dietg/cfgs/server.cfg";
@@ -64,15 +67,19 @@ void myperfmetric(diet_profile_t *profile, estVector_t estvec) {
   diet_est_set_internal(estvec, EST_COREFLOPS, metrics.get_core_flops());
   diet_est_set_internal(estvec, EST_NUMCORES, double(metrics.get_num_cores()));
   diet_est_set_internal(estvec, EST_CURRENTJOBS, double(metrics.get_current_jobs()));
+  diet_est_set_internal(estvec, EST_CONSOJOB, double(metrics.get_bench_conso()));
 }
 
 int solve_matmut(diet_profile_t *pb){
   start_job();
   std::cout << "Solve Matmut: " << std::endl;
-  double *A = NULL;
-  double *B = NULL;
-  double *C = NULL;
+  
+  float MIN_RAND = 1.0;
+  float MAX_RAND = 999.0;
+  float *C = NULL;
   long i,j;   // loop index
+  unsigned long k;
+  int a = 0;
   size_t mA, nA, mB, nB; // size of matrix
   
   // Lecture taille matrice
@@ -82,36 +89,40 @@ int solve_matmut(diet_profile_t *pb){
   //std::cout << "size of matrices: " << *size_mat std::endl;
 
   // Allocation matrice
-  long row=1024*sqrt(*size_mat);
-  long col=1024*sqrt(*size_mat);
-  long taille_matrice = row*col/1048576;
-  
-  A = (double*)malloc(row * col * sizeof(double));
-  if (A == NULL){
-    std::cout << "Allocation of memory failed for matrix " << std::endl;
-    exit(0);
-  }
-  B = (double*)malloc(row * col * sizeof(double));
-  if (B == NULL){
-    std::cout << "Allocation of memory failed for matrix " << std::endl;
-    exit(0);
-  }
-  C = (double*)malloc(row * col * sizeof(double));
+  long row=16384*(*size_mat);
+  long col=16384*(*size_mat);
+  //long taille_matrice = row*col/1048576;
+  /*
+  C = (float*)malloc(row * col * sizeof(float));
   if (C == NULL){
     std::cout << "Allocation of memory failed for matrix " << std::endl;
     exit(0);
   }
+  std::cout << "Allocation of the matrix is done! " << std::endl;
+
   // Intitialisation
   for (i = 0; i < (col * row); i++) {
       //std::cout << "%.0f (%.0f) / %.0f (%.0f) \n",i,log10(fabs(i)),col*row,log10(fabs(col*row)));
-      A[(int)i] = 2;
-      B[(int)i] = 4;
+    C[i] = random() * ((MAX_RAND - MIN_RAND) / RAND_MAX) + MIN_RAND;
+    //std::cout << "INIT : Current " << i << " Total "<< (int)(col*row) << " || Value = " <<  C[i] << std::endl;
   }
+  std::cout << "Initialisation of the matrix is done! " << std::endl;
+
   // Calcul
-  for (i=0; i<col*row; i++){
-    C[i]=A[i]*B[i];
+  for (i=0; i< (col * row); i++){
+    C[i] = C[i] * C[(col*row)-1-i];
+    //std::cout << "Compute : Current " << i << " Opposite "<< (int)(col*row)-1-i << " || Value = " <<  C[i] << std::endl;
   }
-  // Résultat attendu
+  std::cout << "Computation of the matrix is done! " << std::endl;
+  */
+
+  for (k=0; k < (unsigned long)*size_mat ; k++){ //at least 9
+    a = ( a + k ) % 1000;
+    
+  }
+  std::cout << "Iterative Additions until " << k << std::endl;
+
+  /*// Résultat attendu
   bool check = true;
   for (i=0; i<col*row; i++){
     if (C[i] != A[i] * B[i]){
@@ -122,9 +133,17 @@ int solve_matmut(diet_profile_t *pb){
     std::cout << "Multiplication succeed on " << col*row  << " items" << std::endl;
   else
     std::cout << "Multiplication failed " << std::endl;
-  free(A);
-  free(B);
   free(C);
+  */
+
+  /* Send the hostname as a result */
+  int size_hostname = 64;
+  char * hostname = (char *) malloc(64 * sizeof(char));
+  //hostname[63] = '\0';
+  gethostname(hostname, 63);
+  //size_hostname = hostname.length();
+  std::cout << "Host =  " << hostname  << std::endl;
+  diet_string_set(diet_parameter(pb, 1),hostname, DIET_VOLATILE);
   end_job();
   return 0;
 }
@@ -167,8 +186,9 @@ int main(int argc, char **argv) {
   diet_profile_desc_free(profile);
 
   /* Matrix multiplication */
-  profile_matmut = diet_profile_desc_alloc("matmut", 0, 0, 0);
+  profile_matmut = diet_profile_desc_alloc("matmut", 0, 0, 1);
   diet_generic_desc_set(diet_param_desc(profile_matmut, 0), DIET_SCALAR, DIET_DOUBLE);
+  diet_generic_desc_set(diet_param_desc(profile_matmut, 1), DIET_STRING, DIET_CHAR);
   agg2 = diet_profile_desc_aggregator(profile_matmut);
   diet_aggregator_set_type(agg2, DIET_AGG_USER);
   diet_service_use_perfmetric(myperfmetric);

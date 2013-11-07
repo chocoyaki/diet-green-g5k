@@ -18,6 +18,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+from time import gmtime, strftime
+
 logger.setLevel(logging.INFO)
 
 if len(sys.argv) > 1:
@@ -28,10 +30,10 @@ else:
 
 
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
-env = "http://public.lyon.grid5000.fr/~dbalouek/ens/debian/wheezy-x64-diet.dsc"
-walltime = '01:00:00'
-n_nodes = 1
-oargridsub_opts = '-t deploy'
+env = "http://public.lyon.grid5000.fr/~dbalouek/envs/debian/wheezy-x64-diet.dsc"
+walltime = '02:30:00'
+n_nodes = 2
+oargridsub_opts = '-t deploy -t destructive'
 nodes_gr1 = "./nodes_gr1"
 nodes_gr2 ="./nodes_gr2"
 nodes_gr3 ="./nodes_gr3"
@@ -42,14 +44,14 @@ try:
 except OSError:
     pass
 
-cluster = 'sagittaire'
+cluster = 'orion'
 
 sites = []
-hosts_gr1 = {'cluster' : 'sagittaire', 'number' : n_nodes}
-hosts_gr2 = {'cluster' : 'taurus', 'number' : n_nodes}
-hosts_gr3 = {'cluster' : 'sagittaire', 'number' : n_nodes}
+hosts_gr1 = {'cluster' : 'orion', 'number' : n_nodes}#n_nodes}
+hosts_gr2 = {'cluster' : 'sagittaire', 'number' : n_nodes}
+hosts_gr3 = {'cluster' : 'taurus', 'number' : n_nodes}
 
-hosts_service = {'cluster' : cluster, 'number' : 2} # MA + Client
+hosts_service = {'cluster' : 'sagittaire', 'number' : 2} # MA + Client
 
 site = get_cluster_site(hosts_service["cluster"])
 user_frontend_connexion_params={'user': 'dbalouek', 'default_frontend': "lyon", 'ssh_options': ('-tt', '-o', 'BatchMode=yes', '-o', 'PasswordAuthentication=no', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ConnectTimeout=45')}
@@ -91,7 +93,7 @@ print nodes
 logger.info("Deployment started")
 #logger.setLevel(1)
 nodes = deploy(Deployment(hosts = nodes, env_name = "wheezy-x64-diet", 
-                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command = False)
+                          user = "dbalouek", other_options='-d -V4'), out = True)#, check_deployed_command = False)
 deploy_nodes = nodes[0]   
 ko_nodes = nodes[1]
 logger.info("Deployment completed")
@@ -157,12 +159,16 @@ if file_len(nodes_gr1) != hosts_gr1["number"] or file_len(nodes_service) != host
         
 logger.info("The number of nodes in files is matching the desired resources")
 
-for sched in ('CONSO','NODEFLOPS'):
+now = strftime("%d_%b_%H:%M", gmtime())
+
+for sched in ("CONSO","PERF","RANDOMIZE"):
+
     params_diet = {}
     params_diet["site"] = site
-    params_diet["scheduler"] = sched # CONSO | NODEFLOPS | RANDOM | CUSTOM
+    params_diet["scheduler"] = sched # CONSO | PERF | RANDOMIZE
     params_diet["concLimit"] = "1"
     params_diet["useRate"] = "50.0"
+    params_diet["exp_time"] = now
     total_time = 0
     
     mydiet = DietDeploy(params_diet)
@@ -172,7 +178,7 @@ for sched in ('CONSO','NODEFLOPS'):
          
     mydiet.clean_archi() #Erase files from previous deployments
      
-    mydiet.create_archi_files()
+    mydiet.create_diet_architecture_files()
             
     mydiet.retrieve_agents()
       
@@ -180,33 +186,23 @@ for sched in ('CONSO','NODEFLOPS'):
          
     mydiet.update_nodes()
     
-    retry = 0
-    while True and retry < 5:
+   
         
-        mydiet.stop_archi()
-        
-        time.sleep(5)
-        mydiet.start_MA()
-        time.sleep(5)
-        mydiet.start_servers()
-        time.sleep(10)
+    mydiet.stop_archi()
     
+    mydiet.start_MA()
+    mydiet.start_servers()
     
-        test_archi = mydiet.benchmark_metrics()
-        if test_archi == False:
-            logger.info("Some error happened! (%d tries)",retry+1)
-            retry +=1
-        else:
-            break
+    if params_diet["scheduler"] == "CONSO":
+        mydiet.benchmark_metrics()
+    else:
+        logger.info("No benchmarks needed for the current scheduler")
     
-    if retry == 5:
-            logger.info("Exit! (%d tries)",retry)
-            sys.exit(0)
-    time.sleep(5)
-     
+    # mydiet.reload_MA()
+    # mydiet.reload_servers()
     start,end = mydiet.start_clients()
     
-    mydiet.retrieve_results(start, end)
+    mydiet.retrieve_results(start, end, oargrid_job_id)
     
     # Stats
     y_pos = []
@@ -214,7 +210,7 @@ for sched in ('CONSO','NODEFLOPS'):
     height = []
     servers = []
     titre = ""; titre += '[%s] Makespan = %.2f / Consumption = %.2f J / Occupation Rate = %r' % (mydiet.scheduler,mydiet.makespan,(mydiet.consumption["total"])*3600,mydiet.useRate)
-    graph = ""; graph += '[%s].pdf' % (mydiet.scheduler)
+    graph = ""; graph += '[%s]_%s.pdf' % (mydiet.scheduler,str(oargrid_job_id))
     
     pp = PdfPages(graph)
     for host in mydiet.nb_tasks:
@@ -233,4 +229,3 @@ for sched in ('CONSO','NODEFLOPS'):
     plt.savefig(pp, format='pdf')
     pp.close()
     #plt.show()
-
