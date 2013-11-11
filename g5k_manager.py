@@ -31,7 +31,7 @@ else:
 
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
 env = "http://public.lyon.grid5000.fr/~dbalouek/envs/debian/wheezy-x64-diet.dsc"
-walltime = '02:30:00'
+walltime = '02:00:00'
 n_nodes = 2
 oargridsub_opts = '-t deploy -t destructive'
 nodes_gr1 = "./nodes_gr1"
@@ -47,9 +47,9 @@ except OSError:
 cluster = 'orion'
 
 sites = []
-hosts_gr1 = {'cluster' : 'orion', 'number' : n_nodes}#n_nodes}
-hosts_gr2 = {'cluster' : 'sagittaire', 'number' : n_nodes}
-hosts_gr3 = {'cluster' : 'taurus', 'number' : n_nodes}
+hosts_gr1 = {'cluster' : 'sagittaire', 'number' : 3}#n_nodes}
+hosts_gr2 = {'cluster' : 'orion', 'number' : 2}
+hosts_gr3 = {'cluster' : 'taurus', 'number' : 2}
 
 hosts_service = {'cluster' : 'sagittaire', 'number' : 2} # MA + Client
 
@@ -93,7 +93,7 @@ print nodes
 logger.info("Deployment started")
 #logger.setLevel(1)
 nodes = deploy(Deployment(hosts = nodes, env_name = "wheezy-x64-diet", 
-                          user = "dbalouek", other_options='-d -V4'), out = True)#, check_deployed_command = False)
+                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command=True)#, check_deployed_command = False)
 deploy_nodes = nodes[0]   
 ko_nodes = nodes[1]
 logger.info("Deployment completed")
@@ -169,6 +169,8 @@ for sched in ("CONSO","PERF","RANDOMIZE"):
     params_diet["concLimit"] = "1"
     params_diet["useRate"] = "50.0"
     params_diet["exp_time"] = now
+    params_diet["exp_size"] = "regular" # small | regular | big
+    params_diet["oargrid_job_id"] = oargrid_job_id
     total_time = 0
     
     mydiet = DietDeploy(params_diet)
@@ -185,25 +187,39 @@ for sched in ("CONSO","PERF","RANDOMIZE"):
     mydiet.update_frontend()
          
     mydiet.update_nodes()
-    
    
+    test_archi = False
+    retry_max = 5
         
-    mydiet.stop_archi()
+    while (test_archi == False):
+        
+        mydiet.stop_archi()
+        
+        
+        mydiet.start_MA()
+        mydiet.start_servers()
+        
+        test_archi = mydiet.benchmark_metrics()
+                
+        if (test_archi == False):
+            retry_max -= 1
+        if retry_max == 0:
+            logger.info("Exit!")
+            sys.exit()
     
-    mydiet.start_MA()
-    mydiet.start_servers()
-    
-    if params_diet["scheduler"] == "CONSO":
-        mydiet.benchmark_metrics()
-    else:
-        logger.info("No benchmarks needed for the current scheduler")
-    
-    # mydiet.reload_MA()
-    # mydiet.reload_servers()
+    mydiet.reload_servers()
+
+    mydiet.start,end = mydiet.start_clients()
     start,end = mydiet.start_clients()
+    start,end = mydiet.start_clients()
+    start,mydiet.end = mydiet.start_clients()
     
-    mydiet.retrieve_results(start, end, oargrid_job_id)
+    mydiet.retrieve_results(mydiet.start, mydiet.end)
     
+    time.sleep(180)
+#     start,end = mydiet.start_clients()
+#     mydiet.retrieve_results(start, end)
+#     
     # Stats
     y_pos = []
     x_pos = []
@@ -226,6 +242,6 @@ for sched in ("CONSO","PERF","RANDOMIZE"):
     plt.xlabel('Jobs')
     plt.title(titre)
     
-    plt.savefig(pp, format='pdf')
+    #plt.savefig(pp, format='pdf')
     pp.close()
     #plt.show()

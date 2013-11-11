@@ -40,6 +40,8 @@ int MyScheduler::aggregate(corba_response_t* aggrResp, size_t max_srv,
   
   /* Convert the corba response to a list */
 
+  srand(time(NULL));
+
   ServerList candidates = CORBA_to_STL(responses, nb_responses);
   
   BOOST_FOREACH(corba_server_estimation_t &e, candidates) {

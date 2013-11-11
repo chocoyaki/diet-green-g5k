@@ -35,6 +35,8 @@ class DietDeploy():
         self.concLimit = params_diet["concLimit"]
         self.useRate = params_diet["useRate"]
         self.exp_time = params_diet["exp_time"]
+        self.exp_size = params_diet["exp_size"]
+        self.oargrid_job_id = str(params_diet["oargrid_job_id"])
         
         self.consumption = {}
         self.nb_tasks = {}
@@ -51,6 +53,8 @@ class DietDeploy():
         self.flops_watts_bench = {}
         
         self.makespan = -1
+        self.start = -1
+        self.end = -1
     
     def update_frontend(self):
         logger.info("Update DIET folder on %s frontend...",self.site)
@@ -104,8 +108,7 @@ class DietDeploy():
         cmd = "cd "+sched_dir+"; make clean && make"
         a = Remote(cmd, hostname, connection_params = root_connection_params).run()
         for s in a.processes:
-            pout = s.stdout
-        logger.info(pout)
+            pout = s.stderr
         
         logger.info("Chosen scheduler is : %s",self.scheduler)
                 
@@ -140,15 +143,23 @@ class DietDeploy():
         
         cmd = "if [ -e /root/dietg/log/current.jobs ]; then rm /root/dietg/log/current.jobs; fi"
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        
         logger.info("Done!")
-    
+        
     def reload_MA(self):
         # Reinitialize tasks counters on servers
         hostname = self.MA
         cmd = "killall dietAgent; cd /root/dietg/; ./set_masternode.sh"
         a = Remote(cmd, hostname, connection_params = root_connection_params).start()
+    
     def reload_servers(self):  
         servers = [host for host in self.servers]
+        
+        cmd = "if [ -e /root/dietg/log/total.jobs ]; then rm /root/dietg/log/total.jobs; fi"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
+        
+        cmd = "if [ -e /root/dietg/log/current.jobs ]; then rm /root/dietg/log/current.jobs; fi"
+        a = Remote(cmd, servers, connection_params = root_connection_params).run()
         
         cmd = "if [ -e /root/MA.stat ]; then rm /root/MA.stat; touch /root/MA.stat; fi"
         a = Remote(cmd, servers, connection_params = root_connection_params).run()
@@ -176,36 +187,19 @@ class DietDeploy():
             pout = s.stdout
         logger.debug(pout)
         
-#         logger.info("Etalonnage")
-#         
-#         array_process = set()
-#         for serv in range(len(self.servers)):
-#             cmd = "cd "+sched_dir+"; ./client_bench"
-#             a = Remote(cmd, clients, connection_params = root_connection_params).start()
-#             array_process.add(a)
-#             logger.info("Bench started!")
-#             
-#         for process in array_process:
-#             process.wait()
-#             logger.info("Bench ended!")
-#             
-#         for s in array_process:
-#             for a in s.processes:
-#                 pout = a.stdout
-#                 logger.info(pout)
-#             
-#         logger.info("Etalonnage termine")  
-        
-        cmd = "if [ -e /root/dietg/log/total.jobs ]; then rm /root/dietg/log/total.jobs; fi"
-        a = Remote(cmd, servers, connection_params = root_connection_params).run()
-        
-        cmd = "if [ -e /root/dietg/log/current.jobs ]; then rm /root/dietg/log/current.jobs; fi"
-        a = Remote(cmd, servers, connection_params = root_connection_params).run()
-        
-        cmd = "cd "+sched_dir+"; ./client_matrix"
+        cmd = "cd "+sched_dir+"; ./client_"+self.exp_size
         start = time.time()
-        self.task_distribution(len(self.servers))
+        
+        pause = 10
+        if self.exp_size == "small":
+            pause = 8
+        elif self.exp_size == "regular":
+            pause = 90 #90
+        elif self.exp_size == "big":
+            pause = 910
+        self.task_distribution(len(self.servers),pause,cmd,work_rate = 2)
         #a = Remote(cmd, clients, connection_params = root_connection_params).run()
+        
         end = time.time()
 #         for s in a.processes:
 #             pout = s.stdout
@@ -213,20 +207,22 @@ class DietDeploy():
         
         self.makespan = (end - start)
         
-        return start,end
+        
         
         logger.info("Done, check the logs!")
         
-    def retrieve_results(self,start,end,oargrid_job_id):
+        return start,end
+        
+    def retrieve_results(self,start,end):
         self.makespan = end - start;
         resolution = 15
         self.consumption["total"] = 0
         now = strftime("%d_%b_%H:%M", gmtime())
         
-        folder_name = "results_"+str(oargrid_job_id)+"_"+self.scheduler
+        folder_name = "results_"+self.oargrid_job_id+"_"+self.scheduler
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
-        filename = "./"+folder_name+"/%s_%s.log" % (self.scheduler,str(oargrid_job_id))
+        filename = "./"+folder_name+"/%s_%s.log" % (self.scheduler,self.oargrid_job_id)
         already_exists = True
         counter = 0
         while already_exists:
@@ -234,7 +230,7 @@ class DietDeploy():
                with open(filename):
                    already_exists = True
                    counter += 1
-                   filename = "%s_%s_%s.log" % (self.scheduler,str(oargrid_job_id),str(counter))
+                   filename = "%s_%s_%s.log" % (self.scheduler,self.oargrid_job_id,str(counter))
             except IOError:
               already_exists = False
         # Increments counter to change file name
@@ -304,10 +300,10 @@ class DietDeploy():
         logger.info("Done!")
         
         for host in servers:
-            os.system('ssh-keygen -f "/home/dbalouek/.ssh/known_hosts" -R '+host)
+            os.system('ssh-keygen -f "/home/dbalouek/.ssh/known_hosts" -R '+host+" 2> /dev/null")
         
 
-    def task_distribution(self,nb_nodes,pause = 10,task_action = "/root/dietg/diet-sched-example/client_matrix",hostname = None,connection_params = {'user': 'root'},capacity = 50.0,work_rate = 2):
+    def task_distribution(self,nb_nodes,pause = 10,task_action = "/root/dietg/diet-sched-example/client_small",hostname = None,connection_params = {'user': 'root'},capacity = 50.0,work_rate = 2):
         """ Distribute task according to:
             nb_nodes: a number of nodes
             capacity : utilization rate of the platform at a given time
@@ -329,7 +325,7 @@ class DietDeploy():
         if hostname is None:
             hostname = [self.clients]
         
-        logger.info("Execute : "+task_action)
+        logger.info(self.scheduler+" || Execute : client_"+self.exp_size)
         #First wave
         for i in range(1,int(nb_initial)+1):
             j=i
@@ -365,6 +361,8 @@ class DietDeploy():
                        
         logger.info("All the jobs are terminated (success = %s) | (error =%s)",str(nb_diet_success),str(nb_diet_error))
         
+        return i #Nombre de taches executees
+        
     def get_nb_tasks_server(self):
         distant_file = "/root/dietg/log/total.jobs"
         local_file = "./task_counter"
@@ -386,10 +384,12 @@ class DietDeploy():
     
     def get_logs_from_server(self):
         distant_file = "/root/MA.stat"
+        local_folder = "./results_"+self.oargrid_job_id+"_"+self.scheduler+"/"
+        
         nb_files = 0
 #         Get(self.servers, [distant_file])
         for host in self.servers:
-                local_file = host+"_"+self.scheduler+"_SeD.stat"
+                local_file = local_folder+host+"_"+self.scheduler+"_SeD.stat"
                 process = Process("scp root@"+host+":"+distant_file+" "+local_file)
                 process.run()
                 try: #si le fichier existe
@@ -405,6 +405,8 @@ class DietDeploy():
         nb_diet_success = 0
         nb_diet_error = 0
         nb_diet_nofound = 0
+        
+        bench_size = "regular"         
         
         log_repository = "/root/dietg/log/"
         servers = [host for host in self.servers]
@@ -436,9 +438,8 @@ class DietDeploy():
         start = time.time()
         array_process = set()
         for x in range(len(self.servers)):
-            cmd = "cd "+sched_dir+"; ./client_bench"
+            cmd = "cd "+sched_dir+"; ./client_"+bench_size
             a = Remote(cmd, clients, connection_params = root_connection_params).start()
-            time.sleep(1)
             array_process.add(a)
          
         for process in array_process:
@@ -458,7 +459,8 @@ class DietDeploy():
         end = time.time()
           
         makespan = end - start;
-        if makespan < 10:
+        if makespan < 5:
+            logger.info("Benchmark has failed to execute! Another try will occur!")
             return False
             
         logger.info("Total makespan = %d",makespan)
@@ -474,7 +476,7 @@ class DietDeploy():
                 file1.write(str(self.consumption_bench[sed]*makespan))
                 file1.write("\n")
                 file1.close()
-            os.system("scp "+bench_file+" root@"+sed+":"+log_repository+" > /dev/null") #.g5k
+            os.system("scp "+bench_file+" root@"+sed+":"+log_repository) #.g5k
         
         # Performance / FLOPS
         logger.info("Retrieve FLOPS per SeD")

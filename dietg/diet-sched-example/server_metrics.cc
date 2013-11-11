@@ -156,14 +156,7 @@ int get_num_cores(std::string node, std::string cluster, std::string site) {
 double get_bench_conso(){
   double consumption = 0;
   ifstream myfile(file_bench_conso);
-    
-  int N = 10;
-  int i = 0;
-  double* readIn = new double[N];
-  for(i = 0;i < N;i++)
-    myfile >> readIn[i];
-  
-  consumption = *(readIn);
+  myfile >> consumption;
   myfile.close();
   return consumption;
 }
