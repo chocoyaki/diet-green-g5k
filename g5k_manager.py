@@ -31,8 +31,8 @@ else:
 
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
 env = "http://public.lyon.grid5000.fr/~dbalouek/envs/debian/wheezy-x64-diet.dsc"
-walltime = '02:00:00'
-n_nodes = 2
+walltime = '01:00:00'
+n_nodes = 1
 oargridsub_opts = '-t deploy -t destructive'
 nodes_gr1 = "./nodes_gr1"
 nodes_gr2 ="./nodes_gr2"
@@ -47,11 +47,11 @@ except OSError:
 cluster = 'orion'
 
 sites = []
-hosts_gr1 = {'cluster' : 'sagittaire', 'number' : 3}#n_nodes}
-hosts_gr2 = {'cluster' : 'orion', 'number' : 2}
-hosts_gr3 = {'cluster' : 'taurus', 'number' : 2}
+hosts_gr1 = {'cluster' : 'orion', 'nodes' : n_nodes, 'cores' : 12}#n_nodes}
+hosts_gr2 = {'cluster' : 'sagittaire', 'nodes' : n_nodes, 'cores' : 12}
+hosts_gr3 = {'cluster' : 'taurus', 'nodes' : n_nodes, 'cores' : 2}
 
-hosts_service = {'cluster' : 'sagittaire', 'number' : 2} # MA + Client
+hosts_service = {'cluster' : 'sagittaire', 'nodes' : 2} # MA + Client
 
 site = get_cluster_site(hosts_service["cluster"])
 user_frontend_connexion_params={'user': 'dbalouek', 'default_frontend': "lyon", 'ssh_options': ('-tt', '-o', 'BatchMode=yes', '-o', 'PasswordAuthentication=no', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ConnectTimeout=45')}
@@ -61,8 +61,13 @@ logger.info("Job Submission...")
 subs = []
 sub_resources=''
 for hosts in [hosts_gr1,hosts_service,hosts_gr2,hosts_gr3]:
-    sub_resources += "{cluster=\\'"+hosts["cluster"]+"\\'}/nodes="+str(hosts["number"])+'+'
+    sub_resources += "{cluster=\\'"+hosts["cluster"]+"\\'}/nodes="+str(hosts["nodes"])+'+'
 subs.append((OarSubmission(resources=sub_resources[:-1],walltime = walltime,additional_options = oargridsub_opts),site)) #
+
+total_cores = 0
+for hosts in [hosts_gr1,hosts_gr2,hosts_gr3]:
+    total_cores += ( hosts["nodes"]*hosts["cores"] )
+print total_cores
  
 nodes = [] 
 
@@ -93,7 +98,7 @@ print nodes
 logger.info("Deployment started")
 #logger.setLevel(1)
 nodes = deploy(Deployment(hosts = nodes, env_name = "wheezy-x64-diet", 
-                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command=True)#, check_deployed_command = False)
+                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command=False)#, check_deployed_command = False)
 deploy_nodes = nodes[0]   
 ko_nodes = nodes[1]
 logger.info("Deployment completed")
@@ -123,28 +128,28 @@ nb_hosts_gr2 = 0
 nb_hosts_gr3 = 0
 nb_hosts_service = 0
 for node in nodes:
-    if hosts_gr1["cluster"] in node and nb_hosts_gr1 < hosts_gr1["number"]:
+    if hosts_gr1["cluster"] in node and nb_hosts_gr1 < hosts_gr1["nodes"]:
         logger.debug("%s / groupe1",node)
         with open(nodes_gr1, "a") as file1:
             file1.write(node)
             file1.write("\n")
             file1.close()
             nb_hosts_gr1 += 1
-    elif hosts_gr2["cluster"] in node and nb_hosts_gr2 < hosts_gr2["number"]:
+    elif hosts_gr2["cluster"] in node and nb_hosts_gr2 < hosts_gr2["nodes"]:
         logger.debug("%s / groupe2",node)
         with open(nodes_gr2, "a") as file1:
             file1.write(node)
             file1.write("\n")
             file1.close()
             nb_hosts_gr2 += 1
-    elif hosts_gr3["cluster"] in node and nb_hosts_gr3 < hosts_gr3["number"]:
+    elif hosts_gr3["cluster"] in node and nb_hosts_gr3 < hosts_gr3["nodes"]:
         logger.debug("%s / groupe3",node)
         with open(nodes_gr3, "a") as file1:
             file1.write(node)
             file1.write("\n")
             file1.close()
             nb_hosts_gr3 += 1
-    elif hosts_service["cluster"] in node and nb_hosts_service < hosts_service["number"]:
+    elif hosts_service["cluster"] in node and nb_hosts_service < hosts_service["nodes"]:
         with open(nodes_service, "a") as file1:
             logger.debug("%s / service",node)
             file1.write(node)
@@ -152,7 +157,7 @@ for node in nodes:
             file1.close()
             nb_hosts_service += 1
 
-if file_len(nodes_gr1) != hosts_gr1["number"] or file_len(nodes_service) != hosts_service["number"] or file_len(nodes_gr2) != hosts_gr2["number"] or file_len(nodes_gr3) != hosts_gr3["number"] :
+if file_len(nodes_gr1) != hosts_gr1["nodes"] or file_len(nodes_service) != hosts_service["nodes"] or file_len(nodes_gr2) != hosts_gr2["nodes"] or file_len(nodes_gr3) != hosts_gr3["nodes"] :
         logger.info("The number of nodes in files mismatch the desired resources")
         logger.info("End of program")
         sys.exit(0)
@@ -171,6 +176,7 @@ for sched in ("CONSO","PERF","RANDOMIZE"):
     params_diet["exp_time"] = now
     params_diet["exp_size"] = "regular" # small | regular | big
     params_diet["oargrid_job_id"] = oargrid_job_id
+    params_diet["total_cores"] = total_cores
     total_time = 0
     
     mydiet = DietDeploy(params_diet)

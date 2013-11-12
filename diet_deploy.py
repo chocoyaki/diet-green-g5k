@@ -45,6 +45,7 @@ class DietDeploy():
         self.nodes_gr2 = getNodesfromFile("./nodes_gr2")
         self.nodes_gr3 = getNodesfromFile("./nodes_gr3")
         self.nodes_service = getNodesfromFile("./nodes_service")
+        self.total_cores = params_diet["total_cores"]
     
         self.local_repository = os.getcwd()+"/"
         
@@ -326,6 +327,10 @@ class DietDeploy():
             hostname = [self.clients]
         
         logger.info(self.scheduler+" || Execute : client_"+self.exp_size)
+        
+        burst = self.total_cores/100*50
+        throw = 12
+        
         #First wave
         for i in range(1,int(nb_initial)+1):
             j=i

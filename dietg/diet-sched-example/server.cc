@@ -12,8 +12,8 @@
 #include <istream>
 #include <cstdlib>
 #include <string>
-
-using namespace std;
+#include <mutex>
+#include "server.hh"
 
 const char *configuration_file = "/root/dietg/cfgs/server.cfg";
 const char *current_job_file = "/root/dietg/log/current.jobs";
@@ -24,23 +24,57 @@ MetricsAggregator metrics;
 void start_job(){
   puts( "start_job" );
   ofstream current;
+  
+
+  my_lock();
   current.open (current_job_file);
   current << "busy\n";
   current.close();
+  
 
   ofstream total;
   total.open (total_job_file,ofstream::app);
   //total.seekg (0, ios::end);
   total << "another task\n";
-  total.close();  
+  total.close();
+  
+  my_unlock();
+
 }
 
 void end_job(){
+  
+  my_lock();
   puts( "end_job" );
+  int number_of_lines = 0;
+  string line;
+  ifstream myfile(current_job_file);
+    
+  while (getline(myfile, line))
+    {
+      ++number_of_lines;
+    }
+  std::cout << "got number of lines = " << number_of_lines << " for file " << current_jobs << std::endl;
+  myfile.close();
+
+  
+  // erase the file
   if( remove(current_job_file) != 0 )
     perror( "Error deleting jobs" );
   else
     puts( "File successfully deleted" );
+  
+  
+    // reduce it
+  ofstream current;
+  current.open (current_job_file);
+  int i = 0;
+  while (i < number_of_lines-1){
+    current << "busy\n";
+  }
+  current.close();
+  
+  my_unlock();
 }
 
 int handler_myserv(diet_profile_t *p) {
