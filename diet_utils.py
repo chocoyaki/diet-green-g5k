@@ -70,7 +70,7 @@ def set_scheduler(inputFileName, scheduler):
     
 def set_parallel_jobs(inputFileName,limit):
     
-    use_limit = "useConcJobLimit = true"+"\n"
+    use_limit = "useConcJobLimit = false"+"\n"
     value_limit = "maxConcJobs = "+limit+"\n"
     print inputFileName
     with open(inputFileName, "a") as SeDcfg:
