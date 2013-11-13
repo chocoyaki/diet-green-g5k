@@ -12,8 +12,9 @@
 #include <istream>
 #include <cstdlib>
 #include <string>
-#include <mutex>
 #include "server.hh"
+
+using namespace std;
 
 const char *configuration_file = "/root/dietg/cfgs/server.cfg";
 const char *current_job_file = "/root/dietg/log/current.jobs";
@@ -23,14 +24,11 @@ MetricsAggregator metrics;
 
 void start_job(){
   puts( "start_job" );
-  ofstream current;
-  
-
   my_lock();
-  current.open (current_job_file);
+  ofstream current;
+  current.open (current_job_file, ios::app);
   current << "busy\n";
   current.close();
-  
 
   ofstream total;
   total.open (total_job_file,ofstream::app);
@@ -52,9 +50,8 @@ void end_job(){
     
   while (getline(myfile, line))
     {
-      ++number_of_lines;
+      number_of_lines += 1;
     }
-  std::cout << "got number of lines = " << number_of_lines << " for file " << current_jobs << std::endl;
   myfile.close();
 
   
@@ -67,11 +64,13 @@ void end_job(){
   
     // reduce it
   ofstream current;
-  current.open (current_job_file);
+  current.open (current_job_file, ios::app);
   int i = 0;
   while (i < number_of_lines-1){
     current << "busy\n";
+    i += 1;
   }
+  std::cout << "end_job :  I just wrote / number of lines = " << number_of_lines-1 << " for file " << current_job_file << std::endl;
   current.close();
   
   my_unlock();

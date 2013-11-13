@@ -31,7 +31,7 @@ else:
 
 ssh_key = "/tmp/oargrid/oargrid_ssh_key_dbalouek_"+str(oargrid_job_id)
 env = "http://public.lyon.grid5000.fr/~dbalouek/envs/debian/wheezy-x64-diet.dsc"
-walltime = '01:00:00'
+walltime = '02:00:00'
 n_nodes = 1
 oargridsub_opts = '-t deploy -t destructive'
 nodes_gr1 = "./nodes_gr1"
@@ -98,7 +98,7 @@ print nodes
 logger.info("Deployment started")
 #logger.setLevel(1)
 nodes = deploy(Deployment(hosts = nodes, env_name = "wheezy-x64-diet", 
-                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command=False)#, check_deployed_command = False)
+                          user = "dbalouek", other_options='-d -V4'), out = True, check_deployed_command=True)#, check_deployed_command = False)
 deploy_nodes = nodes[0]   
 ko_nodes = nodes[1]
 logger.info("Deployment completed")

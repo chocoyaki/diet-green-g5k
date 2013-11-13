@@ -244,9 +244,9 @@ int MetricsAggregator::get_current_jobs(){
     
   while (getline(myfile, line))
     {
-      ++number_of_lines;
+      number_of_lines += 1;
     }
-  std::cout << "got number of lines = " << number_of_lines << " for file " << current_jobs << std::endl;
+  std::cout << "got number of lines = " << number_of_lines << " for file " << file_current_jobs << std::endl;
   myfile.close();
   return number_of_lines;
 }

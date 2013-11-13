@@ -10,6 +10,11 @@ struct is_busy {
   bool operator() (const corba_server_estimation_t& e) { return diet_est_get_internal(&(e.estim), EST_CURRENTJOBS, 0.0) > 0; }
 };
 
+struct is_busy_multicores {
+ bool operator() (const corba_server_estimation_t& e) { return diet_est_get_internal(&(e.estim), EST_CURRENTJOBS, 0.0) >= diet_est_get_internal(&(e.estim), EST_NUMCORES, 0.0); }
+};
+
+
 class MyScheduler : public UserScheduler {
 
 public:

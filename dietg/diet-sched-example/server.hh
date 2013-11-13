@@ -1,33 +1,42 @@
 // Filename: server.hh
 // Description: 
 // Author: Daniel Balouek
-// Maintainer: 
-// Created: lun. nov. 11 20:32:22 2013 (+0100)
-// Version: 
-// Last-Updated: 
-//           By: 
-//     Update #: 0
-// URL: 
 
-// 
-// server.hh ends here
+#include <iostream>
+#include "common.hh"
+#include "server_metrics.hh"
+#include "server_utils.hh"
+#include "DIET_server.h"
+#include "scheduler/est_internal.hh"
+#include <fstream>
+#include <cmath>
+#include <stdio.h>
+#include <iostream>
+#include <fstream>
+#include <istream>
+#include <cstdlib>
+#include <string>
+
+using namespace std;
 
 const char *lockfile ="/root/dietg/log/lockfile.lock";
 
-inline bool exists_test (const std::string& name) {
-    ifstream f(name.c_str());
-    if (f.good()) {
-        f.close();
-        return true;
-    } else {
-        f.close();
-        return false;
-    }   
+inline bool exists_test (const char* name) {
+  ifstream f(name);
+  if (f.good()) {
+    f.close();
+    return true;
+  } 
+  else {
+    f.close();
+    return false;
+  }   
 }
 
 void my_lock(){
-  while (exists_test(lockfile) == true)
+  while (exists_test(lockfile) == true){
     sleep(1);
+  }
   ofstream lock;
   lock.open(lockfile);
   lock << "lock!\n";
